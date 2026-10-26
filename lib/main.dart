@@ -1,15 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-import 'providers/note_provider.dart';
+import 'cubits/note_cubit.dart';
+import 'repositories/notes_repository.dart';
 import 'pages/home_page.dart';
 import 'pages/add_note_page.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Hive.initFlutter();
+  await Hive.openBox('notesBox');
+
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => NoteProvider(),
-      child: const MyApp(),
+    RepositoryProvider(
+      create: (context) => NotesRepository(Hive.box('notesBox')),
+      child: BlocProvider(
+        create: (context) => NoteCubit(context.read<NotesRepository>()),
+        child: const MyApp(),
+      ),
     ),
   );
 }

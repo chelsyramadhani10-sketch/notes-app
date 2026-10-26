@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../models/note_model.dart';
-import '../providers/note_provider.dart';
+import '../cubits/note_cubit.dart';
 
 class AddNotePage extends StatefulWidget {
   const AddNotePage({super.key});
@@ -17,6 +17,7 @@ class _AddNotePageState extends State<AddNotePage> {
 
   Note? _existingNote;
   bool _initialized = false;
+  bool _isSaving = false;
 
   @override
   void didChangeDependencies() {
@@ -41,7 +42,9 @@ class _AddNotePageState extends State<AddNotePage> {
     super.dispose();
   }
 
-  void _saveNote() {
+  Future<void> _saveNote() async {
+    if (_isSaving) return;
+
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
 
@@ -52,29 +55,39 @@ class _AddNotePageState extends State<AddNotePage> {
       return;
     }
 
-    final provider = context.read<NoteProvider>();
+    setState(() => _isSaving = true);
 
-    if (_existingNote == null) {
-      final newNote = Note(
-        id: DateTime.now().microsecondsSinceEpoch,
-        title: title,
-        content: content,
-        createdAt: DateTime.now(),
-      );
+    try {
+      final cubit = context.read<NoteCubit>();
 
-      provider.addNote(newNote);
-    } else {
-      final updatedNote = Note(
-        id: _existingNote!.id,
-        title: title,
-        content: content,
-        createdAt: _existingNote!.createdAt,
-      );
+      if (_existingNote == null) {
+        await cubit.addNote(
+          Note(title: title, content: content, createdAt: DateTime.now()),
+        );
+      } else {
+        await cubit.updateNote(
+          Note(
+            id: _existingNote!.id,
+            title: title,
+            content: content,
+            createdAt: _existingNote!.createdAt,
+          ),
+        );
+      }
 
-      provider.updateNote(updatedNote);
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menyimpan catatan: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
     }
-
-    Navigator.pop(context);
   }
 
   @override
@@ -108,8 +121,14 @@ class _AddNotePageState extends State<AddNotePage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _saveNote,
-                child: Text(isEditing ? 'Update Note' : 'Save Note'),
+                onPressed: _isSaving ? null : _saveNote,
+                child: Text(
+                  _isSaving
+                      ? 'Menyimpan...'
+                      : isEditing
+                      ? 'Update Note'
+                      : 'Save Note',
+                ),
               ),
             ),
           ],
